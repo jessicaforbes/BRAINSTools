@@ -21,13 +21,18 @@ class ParseXML():
 
     def getXMLFileList(self):
         base_dir = '/scratch/20130913_Parse_DTIPrep_XML'
-        xml_file_pattern = '{0}/*.xml'.format(base_dir)
+        xml_file_pattern = '{0}/_SESSION_ID_*/dtiPrep/*.xml'.format(base_dir)
         xmlFileList = glob(xml_file_pattern)
         return xmlFileList
 
     def parseXMLFileList(self, xmlFileList):
         for xmlFile in xmlFileList:
             print xmlFile
+            pathElements = list(xmlFile.split(os.path.sep))
+            fileName = pathElements.pop()
+            container = pathElements.pop() # dtiPrep
+            session = pathElements.pop().replace("_SESSION_ID_","")
+            year = session.split("_")[-2][0:4]
             self.processingDict = dict()
             tree = et.parse(xmlFile)
             root = tree.getroot()
@@ -51,6 +56,8 @@ class ParseXML():
                 print rho1, math.degrees(theta1), math.degrees(phi1)
                 processing = child[0].text
                 fieldDict = {'filepath' : xmlFile,
+                             'session' : session,
+                             'year' : year,
                              'gradient' : gradient,
                              'xval' : gradDirs[0],
                              'yval' : gradDirs[1],
@@ -62,18 +69,17 @@ class ParseXML():
                 self.appendEntryProcessingDict(processing, phi, theta)
                 # print fieldDict
                 self.makeSQLiteCommand(fieldDict)
-            self.plotThetaVsPhi(self.processingDict, xmlFile)
+            self.plotThetaVsPhi(self.processingDict, session)
             self.processingDict = dict()
 
-    def plotThetaVsPhi(self, procDict, xmlFile):
-        filename = os.path.split(xmlFile)[-1]
+    def plotThetaVsPhi(self, procDict, session):
         pointColors = {'EXCLUDE_SLICECHECK':'rs', 'BASELINE_AVERAGED':'ys', 'EDDY_MOTION_CORRECTED':'bo',
                        3:'y', 4:'c', 5:'m', 6:'k'}
         for key in procDict.keys():
             if key == 'BASELINE_AVERAGED':
                 continue
             plt.plot(procDict[key][0], procDict[key][1], pointColors[key],label=key)
-            plt.title('Processing Type at Point theta Vs. Phi \nfor {0}\n'.format(filename), fontsize = 'large')
+            plt.title('Processing Type at Point Theta Vs. Phi \nfor Session {0}\n'.format(session), fontsize = 'large')
             plt.xlabel("\nPhi (degrees)", fontsize = 'large')
             plt.ylabel("Theta (degrees) \n", fontsize = 'large')
             plt.axis([-180, 180, 0, 90])
@@ -82,7 +88,7 @@ class ParseXML():
                   ncol=2, mode="expand", borderaxespad=0.,shadow=True)
             print key, len(procDict[key][0])
             print procDict[key]
-        pp = pdfpages('{}_ProcessingInfoPerGradient.pdf'.format(filename))
+        pp = pdfpages('{}_ProcessingInfoPerGradient.pdf'.format(session))
         pp.savefig()
         pp.close()
         plt.close()
