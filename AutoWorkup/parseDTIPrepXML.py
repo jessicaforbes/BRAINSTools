@@ -1,11 +1,13 @@
 import os
 from glob import glob
-import re
 from xml.etree import ElementTree as et
 import datetime
 import sqlite3 as lite
 import csv
 import math
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages as pdfpages
+from coordtransform import cartesian_to_spherical
 
 class ParseXML():
 
@@ -26,42 +28,87 @@ class ParseXML():
     def parseXMLFileList(self, xmlFileList):
         for xmlFile in xmlFileList:
             print xmlFile
+            self.processingDict = dict()
             tree = et.parse(xmlFile)
             root = tree.getroot()
             for child in root[2][3:]:
                 gradient = child.attrib['parameter']
                 gradDirs = child[1][0].text.strip().split(' ')
-                print gradDirs
-                (rho, theda, phi) = self.calculateSphericalCoordinates(float(gradDirs[0]),float(gradDirs[1]),float(gradDirs[2]))
-                processing = child[0].text
                 print child.attrib['parameter'], child[1][0].text, child[0].text
+                xval = float(gradDirs[0])
+                yval = float(gradDirs[1])
+                zval = float(gradDirs[2])
+                if zval < 0:
+                    xval *= -1
+                    yval *= -1
+                    zval *= -1
+                # print gradDirs
+                (rho, theta, phi) = self.calculateSphericalCoordinates(
+                    xval, yval, zval)
+                print rho, theta, phi
+                [rho1, theta1, phi1] = cartesian_to_spherical([
+                    float(gradDirs[0]), float(gradDirs[1]), float(gradDirs[2])])
+                print rho1, math.degrees(theta1), math.degrees(phi1)
+                processing = child[0].text
                 fieldDict = {'filepath' : xmlFile,
                              'gradient' : gradient,
                              'xval' : gradDirs[0],
                              'yval' : gradDirs[1],
                              'zval' : gradDirs[2],
-                             'rho' : rho,
-                             'theda' : theda,
-                             'phi' : phi,
+                             'rho' : str(rho),
+                             'theta' : str(theta),
+                             'phi' : str(phi),
                              'processing' : processing}
-                print fieldDict
+                self.appendEntryProcessingDict(processing, phi, theta)
+                # print fieldDict
                 self.makeSQLiteCommand(fieldDict)
+            self.plotThetaVsPhi(self.processingDict, xmlFile)
+            self.processingDict = dict()
+
+    def plotThetaVsPhi(self, procDict, xmlFile):
+        filename = os.path.split(xmlFile)[-1]
+        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'BASELINE_AVERAGED':'ys', 'EDDY_MOTION_CORRECTED':'bo',
+                       3:'y', 4:'c', 5:'m', 6:'k'}
+        for key in procDict.keys():
+            if key == 'BASELINE_AVERAGED':
+                continue
+            plt.plot(procDict[key][0], procDict[key][1], pointColors[key],label=key)
+            plt.title('Processing Type at Point theta Vs. Phi \nfor {0}\n'.format(filename), fontsize = 'large')
+            plt.xlabel("\nPhi (degrees)", fontsize = 'large')
+            plt.ylabel("Theta (degrees) \n", fontsize = 'large')
+            plt.axis([-180, 180, 0, 90])
+            plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
+            plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
+                  ncol=2, mode="expand", borderaxespad=0.,shadow=True)
+            print key, len(procDict[key][0])
+            print procDict[key]
+        pp = pdfpages('{}_ProcessingInfoPerGradient.pdf'.format(filename))
+        pp.savefig()
+        pp.close()
+        plt.close()
+
+    def appendEntryProcessingDict(self, processing, theta, phi):
+        if processing in self.processingDict.keys():
+            self.processingDict[processing][0].append(theta)
+            self.processingDict[processing][1].append(phi)
+        else:
+            self.processingDict[processing] = [[theta],[phi]]
 
     def calculateSphericalCoordinates(self, x, y, z):
         rho = math.sqrt((x**2 + y**2 + z**2))
         if x != 0:
-            theda = math.degrees(math.atan2(y, x))
-        else:
-            theda = 0.0
-        if rho != 0:
-            phi = math.degrees(math.acos(z/rho))
-            phi2 = math.degrees(math.atan2(math.sqrt(x**2+y**2),z))
+            phi = math.degrees(math.atan2(y, x))
         else:
             phi = 0.0
-            phi2 = 0.0
-        # print "rho = ", rho, " theda = ", theda, " phi = ", phi, " phi2 = ", phi2
+        if rho != 0:
+            theta = math.degrees(math.acos(z/rho))
+            theta2 = math.degrees(math.atan2(math.sqrt(x**2+y**2),z))
+        else:
+            theta = 0.0
+            theta = 0.0
+        # print "rho = ", rho, " theta = ", theta, " phi = ", phi, " phi2 = ", phi2
         # print
-        return str(rho), str(theda), str(phi)
+        return str(rho), str(theta), str(phi)
 
     def makeSQLiteCommand(self, image_info):
         keys = image_info.keys()
@@ -95,7 +142,7 @@ class FillDB():
         """
         ## column titles and types for the ImageEval SQLite database
         dbColTypes =  'filepath TEXT, gradient TEXT, xval REAL, yval REAL, zval REAL, ' \
-                      'rho REAL, theda REAL, phi REAL, processing TEXT'
+                      'rho REAL, theta REAL, phi REAL, processing TEXT'
         if os.path.exists(self.dbFileName):
             os.remove(self.dbFileName)
         con = lite.connect(self.dbFileName)
@@ -132,9 +179,9 @@ class PrintReport():
         outputDir = ''
         path = os.path.join(outputDir,"{0}_DTIPrep_Output_XML.csv".format(datetime.date.today().isoformat()))
         Handle = csv.writer(open(path, 'wb'), quoting=csv.QUOTE_ALL)
-        col_name_list = ['filepath, gradient, xval, yval, zval, rho, theda, phi, processing']
+        col_name_list = ['filepath, gradient, xval, yval, zval, rho, theta, phi, processing']
         Handle.writerow(col_name_list)
-        SQLiteCommand = "SELECT filepath, gradient, xval, yval, zval, rho, theda, phi, processing " \
+        SQLiteCommand = "SELECT filepath, gradient, xval, yval, zval, rho, theta, phi, processing " \
                         "FROM dtiprep ORDER BY filepath, gradient;"
         DBinfo = self.getInfoFromDB(SQLiteCommand)
         for line in DBinfo:
@@ -146,7 +193,7 @@ class PrintReport():
 if __name__ == "__main__":
     ParserObject = ParseXML()
     sqlDBcommandList = ParserObject.main()
-    DBObject = FillDB(sqlDBcommandList)
-    DBObject.main()
-    ReportObject = PrintReport()
-    ReportObject.main()
+    # DBObject = FillDB(sqlDBcommandList)
+    # DBObject.main()
+    # ReportObject = PrintReport()
+    # ReportObject.main()
