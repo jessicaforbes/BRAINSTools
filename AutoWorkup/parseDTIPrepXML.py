@@ -16,8 +16,8 @@ class ParseXML():
 
     def main(self):
         xmlFileList = self.getXMLFileList()
-        self.parseXMLFileList(xmlFileList)
-        return self.SQLiteCommandList
+        dbColNames = self.parseXMLFileList(xmlFileList)
+        return self.SQLiteCommandList, dbColNames
 
     def getXMLFileList(self):
         base_dir = '/scratch/20130913_Parse_DTIPrep_XML'
@@ -56,6 +56,7 @@ class ParseXML():
                 print rho1, math.degrees(theta1), math.degrees(phi1)
                 processing = child[0].text
                 fieldDict = {'filepath' : xmlFile,
+                             'project' : 'TEMP_PROJECT',
                              'session' : session,
                              'year' : year,
                              'gradient' : gradient,
@@ -71,6 +72,7 @@ class ParseXML():
                 self.makeSQLiteCommand(fieldDict)
             self.plotThetaVsPhi(self.processingDict, session)
             self.processingDict = dict()
+            return fieldDict.keys()
 
     def plotThetaVsPhi(self, procDict, session):
         pointColors = {'EXCLUDE_SLICECHECK':'rs', 'BASELINE_AVERAGED':'ys', 'EDDY_MOTION_CORRECTED':'bo',
@@ -79,15 +81,15 @@ class ParseXML():
             if key == 'BASELINE_AVERAGED':
                 continue
             plt.plot(procDict[key][0], procDict[key][1], pointColors[key],label=key)
-            plt.title('Processing Type at Point Theta Vs. Phi \nfor Session {0}\n'.format(session), fontsize = 'large')
-            plt.xlabel("\nPhi (degrees)", fontsize = 'large')
-            plt.ylabel("Theta (degrees) \n", fontsize = 'large')
-            plt.axis([-180, 180, 0, 90])
-            plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
-            plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
-                  ncol=2, mode="expand", borderaxespad=0.,shadow=True)
             print key, len(procDict[key][0])
             print procDict[key]
+        plt.title('Processing Type at Point Theta Vs. Phi \nfor Session {0}\n'.format(session), fontsize = 'large')
+        plt.xlabel("\nPhi (degrees)", fontsize = 'large')
+        plt.ylabel("Theta (degrees) \n", fontsize = 'large')
+        plt.axis([-180, 180, 0, 90])
+        plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
+        plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
+              ncol=2, mode="expand", borderaxespad=0.,shadow=True)
         pp = pdfpages('{}_ProcessingInfoPerGradient.pdf'.format(session))
         pp.savefig()
         pp.close()
@@ -147,8 +149,8 @@ class FillDB():
         the information parsed from the XML files.
         """
         ## column titles and types for the ImageEval SQLite database
-        dbColTypes =  'filepath TEXT, gradient TEXT, xval REAL, yval REAL, zval REAL, ' \
-                      'rho REAL, theta REAL, phi REAL, processing TEXT'
+        dbColTypes =  'filepath TEXT, project, TEXT, session TEXT, year TEXT, gradient TEXT, xval REAL,' \
+                      ' yval REAL, zval REAL, rho REAL, theta REAL, phi REAL, processing TEXT'
         if os.path.exists(self.dbFileName):
             os.remove(self.dbFileName)
         con = lite.connect(self.dbFileName)
@@ -166,8 +168,9 @@ class FillDB():
 
 class PrintReport():
 
-    def __init__(self):
+    def __init__(self, dbColNames):
         self.dbFileName = "dtiprepxml.db"
+        self.dbColNames = dbColNames
 
     def main(self):
         self.printReport()
@@ -185,10 +188,10 @@ class PrintReport():
         outputDir = ''
         path = os.path.join(outputDir,"{0}_DTIPrep_Output_XML.csv".format(datetime.date.today().isoformat()))
         Handle = csv.writer(open(path, 'wb'), quoting=csv.QUOTE_ALL)
-        col_name_list = ['filepath, gradient, xval, yval, zval, rho, theta, phi, processing']
-        Handle.writerow(col_name_list)
-        SQLiteCommand = "SELECT filepath, gradient, xval, yval, zval, rho, theta, phi, processing " \
-                        "FROM dtiprep ORDER BY filepath, gradient;"
+        col_names = ",".join(self.dbColNames)
+        Handle.writerow(self.dbColNames)
+        SQLiteCommand = "SELECT {} FROM dtiprep ORDER BY filepath, gradient;".format(col_names)
+        print SQLiteCommand
         DBinfo = self.getInfoFromDB(SQLiteCommand)
         for line in DBinfo:
             Handle.writerow(line)
@@ -198,8 +201,9 @@ class PrintReport():
 
 if __name__ == "__main__":
     ParserObject = ParseXML()
-    sqlDBcommandList = ParserObject.main()
-    # DBObject = FillDB(sqlDBcommandList)
-    # DBObject.main()
-    # ReportObject = PrintReport()
-    # ReportObject.main()
+    (sqlDBcommandList, dbColNames) = ParserObject.main()
+    DBObject = FillDB(sqlDBcommandList)
+    DBObject.main()
+
+    ReportObject = PrintReport(dbColNames)
+    ReportObject.main()
