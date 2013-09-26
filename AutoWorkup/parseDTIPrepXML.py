@@ -1,13 +1,9 @@
 import os
 from glob import glob
 from xml.etree import ElementTree as et
-import datetime
-import sqlite3 as lite
-import csv
 import math
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages as pdfpages
-from coordtransform import cartesian_to_spherical
+from fillDB import FillDB
+from makePlots import MakePlots
 
 class ParseXML():
 
@@ -16,8 +12,8 @@ class ParseXML():
 
     def main(self):
         xmlFileList = self.getXMLFileList()
-        dbColNames = self.parseXMLFileList(xmlFileList)
-        return self.SQLiteCommandList, dbColNames
+        self.parseXMLFileList(xmlFileList)
+        return self.SQLiteCommandList
 
     def getXMLFileList(self):
         base_dir = '/scratch/20130913_Parse_DTIPrep_XML'
@@ -26,6 +22,7 @@ class ParseXML():
         return xmlFileList
 
     def parseXMLFileList(self, xmlFileList):
+        print xmlFileList
         for xmlFile in xmlFileList:
             print xmlFile
             pathElements = list(xmlFile.split(os.path.sep))
@@ -51,9 +48,6 @@ class ParseXML():
                 (rho, theta, phi) = self.calculateSphericalCoordinates(
                     xval, yval, zval)
                 print rho, theta, phi
-                [rho1, theta1, phi1] = cartesian_to_spherical([
-                    float(gradDirs[0]), float(gradDirs[1]), float(gradDirs[2])])
-                print rho1, math.degrees(theta1), math.degrees(phi1)
                 processing = child[0].text
                 fieldDict = {'filepath' : xmlFile,
                              'project' : 'TEMP_PROJECT',
@@ -67,40 +61,7 @@ class ParseXML():
                              'theta' : str(theta),
                              'phi' : str(phi),
                              'processing' : processing}
-                self.appendEntryProcessingDict(processing, phi, theta)
-                # print fieldDict
                 self.makeSQLiteCommand(fieldDict)
-            self.plotThetaVsPhi(self.processingDict, session)
-            self.processingDict = dict()
-            return fieldDict.keys()
-
-    def plotThetaVsPhi(self, procDict, session):
-        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'BASELINE_AVERAGED':'ys', 'EDDY_MOTION_CORRECTED':'bo',
-                       3:'y', 4:'c', 5:'m', 6:'k'}
-        for key in procDict.keys():
-            if key == 'BASELINE_AVERAGED':
-                continue
-            plt.plot(procDict[key][0], procDict[key][1], pointColors[key],label=key)
-            print key, len(procDict[key][0])
-            print procDict[key]
-        plt.title('Processing Type at Point Theta Vs. Phi \nfor Session {0}\n'.format(session), fontsize = 'large')
-        plt.xlabel("\nPhi (degrees)", fontsize = 'large')
-        plt.ylabel("Theta (degrees) \n", fontsize = 'large')
-        plt.axis([-180, 180, 0, 90])
-        plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
-        plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
-              ncol=2, mode="expand", borderaxespad=0.,shadow=True)
-        pp = pdfpages('{}_ProcessingInfoPerGradient.pdf'.format(session))
-        pp.savefig()
-        pp.close()
-        plt.close()
-
-    def appendEntryProcessingDict(self, processing, theta, phi):
-        if processing in self.processingDict.keys():
-            self.processingDict[processing][0].append(theta)
-            self.processingDict[processing][1].append(phi)
-        else:
-            self.processingDict[processing] = [[theta],[phi]]
 
     def calculateSphericalCoordinates(self, x, y, z):
         rho = math.sqrt((x**2 + y**2 + z**2))
@@ -110,12 +71,9 @@ class ParseXML():
             phi = 0.0
         if rho != 0:
             theta = math.degrees(math.acos(z/rho))
-            theta2 = math.degrees(math.atan2(math.sqrt(x**2+y**2),z))
+            # theta2 = math.degrees(math.atan2(math.sqrt(x**2+y**2),z))
         else:
             theta = 0.0
-            theta = 0.0
-        # print "rho = ", rho, " theta = ", theta, " phi = ", phi, " phi2 = ", phi2
-        # print
         return str(rho), str(theta), str(phi)
 
     def makeSQLiteCommand(self, image_info):
@@ -128,82 +86,11 @@ class ParseXML():
         # print self.SQLiteCommandList
         print
 
-class FillDB():
-
-    def __init__(self, sqlDBcommandList):
-        self.dbFileName = "dtiprepxml.db"
-        self.sqlDBcommandList = sqlDBcommandList
-        #self.output_dir = os.path.join(args.basePath, args.superProject,'reports', datetime.date.today().isoformat())
-        #if os.path.exists(self.output_dir):
-        #    pass
-        #else:
-        #    os.mkdir(self.output_dir)
-
-    def main(self):
-        self.createDB()
-        self.fillDB()
-
-    def createDB(self):
-        """
-        Create the DTIPrep Output SQLite database that will contain all of
-        the information parsed from the XML files.
-        """
-        ## column titles and types for the ImageEval SQLite database
-        dbColTypes =  'filepath TEXT, project, TEXT, session TEXT, year TEXT, gradient TEXT, xval REAL,' \
-                      ' yval REAL, zval REAL, rho REAL, theta REAL, phi REAL, processing TEXT'
-        if os.path.exists(self.dbFileName):
-            os.remove(self.dbFileName)
-        con = lite.connect(self.dbFileName)
-        dbCur = con.cursor()
-        dbCur.execute("CREATE TABLE dtiprep({0});".format(dbColTypes))
-        dbCur.close()
-
-    def fillDB(self):
-        con = lite.connect(self.dbFileName)
-        dbCur = con.cursor()
-        for command in self.sqlDBcommandList:
-            dbCur.execute(command)
-            con.commit()
-        dbCur.close()
-
-class PrintReport():
-
-    def __init__(self, dbColNames):
-        self.dbFileName = "dtiprepxml.db"
-        self.dbColNames = dbColNames
-
-    def main(self):
-        self.printReport()
-        # self.deleteDB()
-
-    def getInfoFromDB(self, SQLiteCommand):
-        con = lite.connect(self.dbFileName)
-        dbCur = con.cursor()
-        dbCur.execute(SQLiteCommand)
-        DBinfo = dbCur.fetchall()
-        dbCur.close()
-        return DBinfo
-
-    def printReport(self):
-        outputDir = ''
-        path = os.path.join(outputDir,"{0}_DTIPrep_Output_XML.csv".format(datetime.date.today().isoformat()))
-        Handle = csv.writer(open(path, 'wb'), quoting=csv.QUOTE_ALL)
-        col_names = ",".join(self.dbColNames)
-        Handle.writerow(self.dbColNames)
-        SQLiteCommand = "SELECT {} FROM dtiprep ORDER BY filepath, gradient;".format(col_names)
-        print SQLiteCommand
-        DBinfo = self.getInfoFromDB(SQLiteCommand)
-        for line in DBinfo:
-            Handle.writerow(line)
-
-    def deleteDB(self):
-        os.remove(self.dbFileName)
 
 if __name__ == "__main__":
     ParserObject = ParseXML()
-    (sqlDBcommandList, dbColNames) = ParserObject.main()
+    (sqlDBcommandList) = ParserObject.main()
     DBObject = FillDB(sqlDBcommandList)
     DBObject.main()
-
-    ReportObject = PrintReport(dbColNames)
-    ReportObject.main()
+    PlotObject = MakePlots()
+    PlotObject.main()
