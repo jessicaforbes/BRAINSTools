@@ -11,20 +11,31 @@ class ParseXML():
         self.SQLiteCommandList = list()
 
     def main(self):
+        sessionDict = self.getProject()
         xmlFileList = self.getXMLFileList()
-        self.parseXMLFileList(xmlFileList)
+        self.parseXMLFileList(xmlFileList, sessionDict)
         return self.SQLiteCommandList
 
     def getXMLFileList(self):
-        base_dir = '/scratch/20130913_Parse_DTIPrep_XML'
+        base_dir = '/Shared/sinapse/CACHE/20130901_TRACK_DWI/DTIPrep_20130901_TRACK_CACHE/dwiPreprocessing'
+        # base_dir = '/scratch/20130913_Parse_DTIPrep_XML'
         xml_file_pattern = '{0}/_SESSION_ID_*/dtiPrep/*.xml'.format(base_dir)
         xmlFileList = glob(xml_file_pattern)
         return xmlFileList
 
-    def parseXMLFileList(self, xmlFileList):
-        print xmlFileList
+    def getProject(self):
+        sessionDict = dict()
+        with open('project_subject_track.csv','r') as handle:
+            read_file = handle.read()
+            session_list = read_file.strip().split('\n')
+            for line in session_list:
+                project, session = line.strip().replace('"','').split(',')
+                sessionDict[session] = project
+        return sessionDict
+
+    def parseXMLFileList(self, xmlFileList, sessionDict):
         for xmlFile in xmlFileList:
-            print xmlFile
+            print "Parsing ", xmlFile
             pathElements = list(xmlFile.split(os.path.sep))
             fileName = pathElements.pop()
             container = pathElements.pop() # dtiPrep
@@ -47,10 +58,10 @@ class ParseXML():
                 # print gradDirs
                 (rho, theta, phi) = self.calculateSphericalCoordinates(
                     xval, yval, zval)
-                print rho, theta, phi
+                print "rho: ", rho, ", theta: ", theta, ", phi: ", phi
                 processing = child[0].text
                 fieldDict = {'filepath' : xmlFile,
-                             'project' : 'TEMP_PROJECT',
+                             'project' : sessionDict[session],
                              'session' : session,
                              'year' : year,
                              'gradient' : gradient,

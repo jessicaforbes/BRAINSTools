@@ -18,11 +18,6 @@ class FillDB():
         self.fillDB()
 
     def createDB(self):
-        """
-        Create the DTIPrep Output SQLite database that will contain all of
-        the information parsed from the XML files.
-        """
-        ## column titles and types for the ImageEval SQLite database
         dbColTypes =  'filepath TEXT, project, TEXT, session TEXT, year TEXT, gradient TEXT, xval REAL,' \
                       ' yval REAL, zval REAL, rho REAL, theta REAL, phi REAL, processing TEXT'
         if os.path.exists(self.dbFileName):
