@@ -39,8 +39,8 @@ class MakePlots():
         pp = pdfpages(path)
         site_list = self.getListFromDB("SELECT DISTINCT project FROM {};".format(self.tableName))
         print site_list
-        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'BASELINE_AVERAGED':'ys', 'EDDY_MOTION_CORRECTED':'bo',
-                       3:'y', 4:'c', 5:'m', 6:'k'}
+        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'EXCLUDE_INTERLACECHECK':'ys', 'EDDY_MOTION_CORRECTED':'bo',
+                       'EXCLUDE_GRADIENTCHECK':'gs', 4:'c', 5:'m', 6:'k'}
         for site in site_list:
             processingDict = self.getProcessingDict(site)
             print processingDict
@@ -52,7 +52,7 @@ class MakePlots():
                 print processingDict[key]
             plt.title('Processing Type at Point Phi Vs. Theta '
                       '\nfor Project {0}\n'.format(site), fontsize = 'large')
-            plt.xlabel("\nPhi (degrees)", fontsize = 'large')
+            plt.xlabel("Phi (degrees)", fontsize = 'large')
             plt.ylabel("Theta (degrees) \n", fontsize = 'large')
             plt.axis([-180, 180, 0, 90])
             plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
