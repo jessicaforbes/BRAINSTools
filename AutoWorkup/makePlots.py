@@ -11,7 +11,8 @@ class MakePlots():
         self.tableName = "dtiprep"
 
     def main(self):
-        self.plotPerSite()
+        # self.plotPerSite()
+        self.plotPerSitePerYear()
 
     def _querySQLiteDB(self, SQLite_query):
         con = lite.connect(self.dbFileName)
@@ -35,9 +36,9 @@ class MakePlots():
         This function makes plots by site showing the processing method
         for each gradient in spherical coordinates: phi vs theta.
         """
-        path = os.path.join("{0}_Plots_By_Site_DTIPrep_Output_XML.pdf".format(datetime.date.today().isoformat()))
+        path = os.path.join("test_{0}_Plots_By_Site_DTIPrep_Output_XML.pdf".format(datetime.date.today().isoformat()))
         pp = pdfpages(path)
-        site_list = self.getListFromDB("SELECT DISTINCT project FROM {};".format(self.tableName))
+        site_list = self.getListFromDB("SELECT DISTINCT project FROM {} ORDER BY project;".format(self.tableName))
         print site_list
         pointColors = {'EXCLUDE_SLICECHECK':'rs', 'EXCLUDE_INTERLACECHECK':'ys', 'EDDY_MOTION_CORRECTED':'bo',
                        'EXCLUDE_GRADIENTCHECK':'gs', 4:'c', 5:'m', 6:'k'}
@@ -50,21 +51,57 @@ class MakePlots():
                 plt.plot(processingDict[key][0], processingDict[key][1], pointColors[key],label=key)
                 print key, len(processingDict[key][0])
                 print processingDict[key]
-            plt.title('Processing Type at Point Phi Vs. Theta '
-                      '\nfor Project {0}\n'.format(site), fontsize = 'large')
-            plt.xlabel("Phi (degrees)", fontsize = 'large')
-            plt.ylabel("Theta (degrees) \n", fontsize = 'large')
-            plt.axis([-180, 180, 0, 90])
-            plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
-            plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
-                  ncol=2, mode="expand", borderaxespad=0.,shadow=True)
+            self.setPlotAttributes('Processing Type at Point Phi Vs. Theta '
+                  '\nfor Project {0}\n'.format(site))
             pp.savefig()
             plt.close()
         pp.close()
 
-    def getProcessingDict(self, site):
-        query_results = self._querySQLiteDB("SELECT processing,phi,theta FROM {} "
+    def setPlotAttributes(self, title):
+        plt.title(title, fontsize = 'large')
+        plt.xlabel("Phi (degrees)", fontsize = 'large')
+        plt.ylabel("Theta (degrees) \n", fontsize = 'large')
+        plt.axis([-180, 180, 0, 90])
+        plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
+        plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
+              ncol=2, mode="expand", borderaxespad=0.,shadow=True)
+
+    def plotPerSitePerYear(self):
+        path = os.path.join("test_{0}_Plots_By_Year_and_Site_DTIPrep_Output_XML.pdf".format(datetime.date.today().isoformat()))
+        pp = pdfpages(path)
+        site_list = self.getListFromDB("SELECT DISTINCT project FROM {} ORDER BY project;".format(self.tableName))
+        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'EXCLUDE_INTERLACECHECK':'ys', 'EDDY_MOTION_CORRECTED':'bo',
+                       'EXCLUDE_GRADIENTCHECK':'gs', 4:'c', 5:'m', 6:'k'}
+        for site in site_list:
+            print site
+            yearList = self.getListFromDB("SELECT DISTINCT year FROM {} WHERE project='{}' ORDER BY year;".format(self.tableName, site))
+            print yearList
+            for year in yearList:
+                processingDict = self.getProcessingDict(site, year)
+                for key in sorted(processingDict.keys()):
+                    if key == 'BASELINE_AVERAGED':
+                        continue
+                    plt.plot(processingDict[key][0], processingDict[key][1], pointColors[key],label=key)
+                    print key, len(processingDict[key][0])
+                    print processingDict[key]
+                self.setPlotAttributes('Processing Type at Point Phi Vs. Theta '
+                      '\nfor Project {0} and Year {1}\n'.format(site, year))
+                pp.savefig()
+                plt.close()
+        pp.close()
+
+
+    def plotPerProcessingPerSite(self):
+        path = os.path.join("{0}_Processing_Plots_By_Site_DTIPrep_Output_XML.pdf".format(datetime.date.today().isoformat()))
+        pp = pdfpages(path)
+
+    def getProcessingDict(self, site, year=None):
+        if year == None:
+            query_results = self._querySQLiteDB("SELECT processing,phi,theta FROM {} "
                                      "WHERE project='{}';".format(self.tableName,site))
+        else:
+            query_results = self._querySQLiteDB("SELECT processing,phi,theta FROM {} "
+                                     "WHERE project='{}' and year='{}';".format(self.tableName, site, year))
         processingDict = dict()
         for row in query_results:
             processingDict = self.appendEntryProcessingDict(
