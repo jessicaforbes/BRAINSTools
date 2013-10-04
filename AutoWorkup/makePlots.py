@@ -3,6 +3,8 @@ import os
 from matplotlib.backends.backend_pdf import PdfPages as pdfpages
 import sqlite3 as lite
 import matplotlib.pyplot as plt
+import matplotlib
+import numpy as np
 
 class MakePlots():
 
@@ -20,14 +22,15 @@ class MakePlots():
         pp = pdfpages(path)
         site_list = self.getListFromDB("SELECT DISTINCT project FROM {} ORDER BY project;".format(self.tableName))
         for site in site_list:
-            bins = self.getBins(site)
+            print "Creating scatter plot for site:", site
+            (bins, stepSize) = self.getBins(site)
             (x, y, percentGoodList, size) = self.makePlotLists(bins)
-            print x, y, percentGoodList, size
-            print
-            self.setPlotAttributes('Processing Type at Point Phi Vs. Theta \nfor Project {0}\n'.format(site))
-            plt.scatter(x, y, s=size, c=percentGoodList)
-            print percentGoodList
-            # plt.show()
+            self.setPlotAttributes("Percentage of Good Gradients at Point Phi vs Theta "
+                                   "\n(Binned Every {} Degrees) for Project {}\n".format(stepSize, site))
+            # self.setPlotAttributes('Processing Type at Point Phi Vs. Theta \nfor Project {0}\n'.format(site))
+            cmap = plt.get_cmap('RdYlGn')
+            sc = plt.scatter(x, y, s=size, c=percentGoodList, cmap=cmap)
+            plt.colorbar(sc)
             pp.savefig()
             plt.close()
         pp.close()
@@ -74,7 +77,7 @@ class MakePlots():
                 bins[(xval, yval)] = self.getListFromDB("SELECT processing FROM {} WHERE "
                     "phi>={} AND phi<{} AND theta>={} AND theta<{} AND project='{}';".format(
                     self.tableName,xval,xval+stepSize,yval,yval+stepSize,site))
-        return bins
+        return bins, stepSize
 
     def _querySQLiteDB(self, SQLite_query):
         con = lite.connect(self.dbFileName)
@@ -141,7 +144,7 @@ class MakePlots():
 
     def setPlotAttributes(self, title):
         plt.title(title, fontsize = 'large')
-        plt.xlabel("Phi (degrees)", fontsize = 'large')
+        plt.xlabel("\nPhi (degrees)", fontsize = 'large')
         plt.ylabel("Theta (degrees) \n", fontsize = 'large')
         plt.axis([-180, 180, 0, 90])
         plt.subplots_adjust(bottom = 0.2, top = 0.86, right = .88, left = 0.15)
