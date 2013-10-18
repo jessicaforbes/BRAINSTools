@@ -15,6 +15,7 @@ class MakePlots():
                                        "ORDER BY project;".format(self.tableName))
         self.scatterPlotBySite(site_list)
         self.scatterPlotBySiteByYear(site_list)
+        self.scatterPlotByScan()
 
     def scatterPlotBySite(self, site_list):
         path = os.path.join("{0}_Scatter_Plots_By_Site_DTIPrep_"
@@ -57,7 +58,45 @@ class MakePlots():
                 pp.savefig()
                 plt.close()
         pp.close()
-        print "\nScatter plots by site and year saved in file: \n{}".format(path)
+        print "\nScatter plots by site and year saved in file: \n{}\n".format(path)
+
+    def makeSessionObjectDict(self):
+        queryResult = self._querySQLiteDB("SELECT session, project, phi, theta, "
+                                       "processing FROM {} WHERE processing != 'BASELINE_AVERAGED'"
+                                       ";".format(self.tableName))  #ORDER BY project, session
+        sessionObjectDict = dict()
+        for line in queryResult:
+            session = str(line[0])
+            project = str(line[1])
+            key = "{}_{}".format(project, session)
+            if key not in sessionObjectDict.keys():
+                sessionObjectDict[key] = SessionInfo(session, project)
+            sessionObjectDict[key].setProcessingInfo(
+                str(line[4]), int(line[2]), int(line[3]))
+        return sessionObjectDict
+
+    def scatterPlotByScan(self):
+        sessionObjectDict = self.makeSessionObjectDict()
+        path = os.path.join("{0}_Scatter_Plots_By_Session_DTIPrep_"
+                            "Output_XML_orderedBySite.pdf".format(datetime.date.today().isoformat()))
+        pp = pdfpages(path)
+        pointColors = {'EXCLUDE_SLICECHECK':'rs', 'EXCLUDE_INTERLACECHECK':'ys',
+                       'EDDY_MOTION_CORRECTED':'go', 'EXCLUDE_GRADIENTCHECK': 'bs'}
+        for key in sorted(sessionObjectDict.keys()):
+            self.setPlotAttributes("Gradient Processing Types at Point Phi vs Theta "
+                                    "\nfor Session {} and Project {}\n".format(
+                                    sessionObjectDict[key].session,
+                                    sessionObjectDict[key].project))
+            for process in sessionObjectDict[key].processingDict.keys():
+                (xList, yList) = sessionObjectDict[key].processingDict[process]
+                plt.plot(xList, yList, pointColors[process],label=process, markeredgecolor ='none')
+            plt.legend(fontsize = 'small', bbox_to_anchor=(0., -.27, 1., .02), loc=3,
+                  ncol=2, mode="expand", borderaxespad=0.,shadow=True)
+            plt.xlabel("Phi (degrees)", fontsize = 'large') #xlabel set here because it differs from other plots.
+            pp.savefig()
+            plt.close()
+            print "Making scatter plot for session: ", sessionObjectDict[key].session
+        pp.close()
 
     def makePlotLists(self, bins):
         x = list()
@@ -133,3 +172,16 @@ class MakePlots():
         plt.axis([-180, 180, 0, 90])
         plt.subplots_adjust(bottom = 0.2, top = 0.86,
                             right = .88, left = 0.15)
+
+class SessionInfo():
+    def __init__(self, session, project):
+        self.session = session
+        self.project = project
+        self.processingDict = dict()
+
+    def setProcessingInfo(self, processing, xval, yval):
+        if processing not in self.processingDict.keys():
+            self.processingDict[processing] = [[xval],[yval]]
+        else:
+            self.processingDict[processing][0].append(xval)
+            self.processingDict[processing][1].append(yval)
