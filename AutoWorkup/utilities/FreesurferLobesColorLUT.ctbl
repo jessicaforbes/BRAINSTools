@@ -1,0 +1,23 @@
+# Color table file BRAINSTools/AutoWorkup/utilities/FreesurferLobesColorLUT.ctbl
+# 5002 values
+0 Black 0 0 0 0
+7 Left_Cerebellum 170 0 255 255
+8 Left_Cerebellum 170 0 255 255
+46 Right_Cerebellum 170 170 255 255
+47 Right_Cerebellum 170 170 255 255
+1001 Left_Frontal 0 0 255 255
+1004 Left_Occipital 170 0 0 255
+1005 Left_Temporal 0 85 0 255
+1006 Left_Parietal 255 255 0 255
+2001 Right_Frontal 0 255 255 255
+2004 RIght_Occipital 255 0 0 255
+2005 Right_Temporal 0 255 0 255
+2006 Right_Parietal 255 248 148 255
+3001 Left_Frontal 0 0 255 255
+3004 Left_Occipital 170 0 0 255
+3005 Left_Temporal 0 85 0 255
+3006 Left_Parietal 255 255 0 255
+4001 Right_Frontal 0 255 255 255
+4004 Right_Occipital 255 0 0 255
+4005 Right_Temporal 0 255 0 255
+4006 Right_Parietal 255 252 152 255
